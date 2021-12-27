@@ -24,9 +24,6 @@ datawriter = None
 
 orbit = OrbitMode()
 
-# init servo camera:
-orbit.init()
-
 def getTimestampFilename():
     now = datetime.now()
     basename = now.strftime("%Y-%m-%d_%H-%M-%S")
@@ -42,6 +39,11 @@ def main(scr):
     global datawriter
 
     scr.clear()
+
+    # init servo camera:
+    scr.addstr(0, 0, "Scanning for human...")
+    orbit.scan()
+    scr.addstr(1, 0, "Found human!")
 
     while True:
         if cap is not None and out is not None:
@@ -61,46 +63,46 @@ def main(scr):
         if c == ord(' '):
             return
 
-        # Control the camera
-        if c == curses.KEY_RIGHT:
-            orbit.camRight()
-            last_action[0] = -cam_delta
-
-        elif c == curses.KEY_LEFT:
-            orbit.camLeft()
-            last_action[0] = cam_delta
-
-        elif c == curses.KEY_DOWN:
-            last_action[1] = cam_delta
-
-        elif c == curses.KEY_UP:
-            last_action[1] = -cam_delta
-
-        # Control the motor
-        elif c == ord('a'):   # left strafe
-            orbit.clockwise()
-            last_action[2] = speed
-            last_action[3] = -speed
-            last_action[4] = speed
-            last_action[5] = -speed
-        elif c == ord('d'):   # right strafe
-            orbit.counterClockwise()
-            last_action[2] = -speed
-            last_action[3] = speed
-            last_action[4] = -speed
-            last_action[5] = speed
-        elif c == ord('w'):   # forward
-            orbit.forward()
-            last_action[2] = speed
-            last_action[3] = speed
-            last_action[4] = speed
-            last_action[5] = speed
-        elif c == ord('s'):   # backward
-            orbit.backward()
-            last_action[2] = -speed
-            last_action[3] = -speed
-            last_action[4] = -speed
-            last_action[5] = -speed
+        # # Control the camera
+        # if c == curses.KEY_RIGHT:
+        #     orbit.camRight()
+        #     last_action[0] = -cam_delta
+        #
+        # elif c == curses.KEY_LEFT:
+        #     orbit.camLeft()
+        #     last_action[0] = cam_delta
+        #
+        # elif c == curses.KEY_DOWN:
+        #     last_action[1] = cam_delta
+        #
+        # elif c == curses.KEY_UP:
+        #     last_action[1] = -cam_delta
+        #
+        # # Control the motor
+        # elif c == ord('a'):   # left strafe
+        #     orbit.clockwise()
+        #     last_action[2] = speed
+        #     last_action[3] = -speed
+        #     last_action[4] = speed
+        #     last_action[5] = -speed
+        # elif c == ord('d'):   # right strafe
+        #     orbit.counterClockwise()
+        #     last_action[2] = -speed
+        #     last_action[3] = speed
+        #     last_action[4] = -speed
+        #     last_action[5] = speed
+        # elif c == ord('w'):   # forward
+        #     orbit.forward()
+        #     last_action[2] = speed
+        #     last_action[3] = speed
+        #     last_action[4] = speed
+        #     last_action[5] = speed
+        # elif c == ord('s'):   # backward
+        #     orbit.backward()
+        #     last_action[2] = -speed
+        #     last_action[3] = -speed
+        #     last_action[4] = -speed
+        #     last_action[5] = -speed
 
         # increase/decrease motor speed
         if c == curses.KEY_PPAGE:   # Page up: increase speed
@@ -114,7 +116,7 @@ def main(scr):
                 filename = getTimestampFilename()
                 cap = cv2.VideoCapture(0)
 
-                scr.addstr(0, 0, "Recording video to file: %s.avi" % filename)
+                scr.addstr(2, 0, "Recording video to file: %s.avi" % filename)
 
                 frame_width = int(cap.get(3))
                 frame_height = int(cap.get(4))
@@ -138,7 +140,7 @@ def main(scr):
                 actions_file.close()
                 actions_file = None
 
-                scr.addstr(0, 0, "Done recoding. Save data to file....                         ")
+                scr.addstr(3, 0, "Done recoding. Saved data to file....                         ")
 
 wrapper(main)
 orbit.close()
