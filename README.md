@@ -20,6 +20,8 @@ In orbit mode, the movement space is transformed: it becomes an orbit about the 
 
 YOLO models:
 
-Currently I am using two models: 
+Currently I am using two models:
+
 1 - the yolov5s pretrained model "as is" to detect persons in the image. 
+
 2 - a hand detection model (models/hands_model.pt) which I trained from a pretrained yolov5s, which I then finetuned on the oxford hands dataset. The annotations for the dataset were generated automatically using https://github.com/SignusRobotics/oxford-hands-to-yolo
