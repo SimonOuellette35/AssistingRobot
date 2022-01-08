@@ -1,13 +1,13 @@
 import grpc
-import YOLOsvc.YOLOsvc_pb2 as YOLOsvc_pb2
-import YOLOsvc.YOLOsvc_pb2_grpc as YOLOsvc_pb2_grpc
+import YOLOsvc_pb2
+import YOLOsvc_pb2_grpc
 import cv2
 import base64
 
 MODEL_TYPE = 'person' # for the hands model, replace this with 'hands'
 MAX_MESSAGE_LENGTH = 6000000
 WIDTH=640
-HEIGHT=512
+HEIGHT=480
 
 cam = cv2.VideoCapture(0)
 cam.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
