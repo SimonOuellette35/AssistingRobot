@@ -5,6 +5,7 @@ import YOLOsvc_pb2
 import YOLOsvc_pb2_grpc
 import torch
 import numpy as np
+import base64
 
 MODEL_TYPE = 'person'  # for the hands model, replace this with 'hand'
 MAX_MESSAGE_LENGTH = 6000000
@@ -64,7 +65,7 @@ def ResultsToDetections(results):
                                    confidence=confidence_array)
 
 class YOLOServicer(YOLOsvc_pb2_grpc.YOLOsvcServicer):
-    """Provides methods that implement functionality of route guide server."""
+    """Provides methods that implement functionality of YOLOsvc server."""
     global model
 
     def __init__(self):
@@ -73,6 +74,17 @@ class YOLOServicer(YOLOsvc_pb2_grpc.YOLOsvcServicer):
     def ObjectDetection(self, img, context):
         # from Image, get numpy array
         x = grpcImageToArray(img)
+
+        results = model(x)
+
+        detections = ResultsToDetections(results)
+        return detections
+
+    def ObjectDetectionV2(self, request, context):
+        img = request.b64image.encode()
+
+        tmp = base64.decodebytes(img)
+        x = np.frombuffer(tmp, dtype='uint8').reshape(request.height, request.width, -1)
 
         results = model(x)
 

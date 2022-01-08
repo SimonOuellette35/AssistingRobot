@@ -20,6 +20,11 @@ class YOLOsvcStub(object):
                 request_serializer=YOLOsvc__pb2.Image.SerializeToString,
                 response_deserializer=YOLOsvc__pb2.Detections.FromString,
                 )
+        self.ObjectDetectionV2 = channel.unary_unary(
+                '/YOLOsvc.YOLOsvc/ObjectDetectionV2',
+                request_serializer=YOLOsvc__pb2.ImageB64.SerializeToString,
+                response_deserializer=YOLOsvc__pb2.Detections.FromString,
+                )
 
 
 class YOLOsvcServicer(object):
@@ -32,12 +37,23 @@ class YOLOsvcServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ObjectDetectionV2(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_YOLOsvcServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'ObjectDetection': grpc.unary_unary_rpc_method_handler(
                     servicer.ObjectDetection,
                     request_deserializer=YOLOsvc__pb2.Image.FromString,
+                    response_serializer=YOLOsvc__pb2.Detections.SerializeToString,
+            ),
+            'ObjectDetectionV2': grpc.unary_unary_rpc_method_handler(
+                    servicer.ObjectDetectionV2,
+                    request_deserializer=YOLOsvc__pb2.ImageB64.FromString,
                     response_serializer=YOLOsvc__pb2.Detections.SerializeToString,
             ),
     }
@@ -64,6 +80,23 @@ class YOLOsvc(object):
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/YOLOsvc.YOLOsvc/ObjectDetection',
             YOLOsvc__pb2.Image.SerializeToString,
+            YOLOsvc__pb2.Detections.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def ObjectDetectionV2(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/YOLOsvc.YOLOsvc/ObjectDetectionV2',
+            YOLOsvc__pb2.ImageB64.SerializeToString,
             YOLOsvc__pb2.Detections.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

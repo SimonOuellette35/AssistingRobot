@@ -24,6 +24,7 @@ package YOLOsvc;
 // Interface exported by the server.
 service YOLOsvc {
   rpc ObjectDetection(Image) returns (Detections) {}
+  rpc ObjectDetectionV2(ImageB64) returns (Detections) {}
 }
 
 message RGB {
@@ -45,4 +46,10 @@ message Detections {
   repeated float ymax=4;
   repeated int32 classes=5;
   repeated float confidence=6;
+}
+
+message ImageB64 {
+  string b64image = 1;
+  int32 width=2;
+  int32 height=3;
 }

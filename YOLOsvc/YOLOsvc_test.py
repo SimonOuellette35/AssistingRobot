@@ -7,8 +7,14 @@ import YOLOsvc_pb2
 import YOLOsvc_pb2_grpc
 import cv2
 import time
+import base64
+import numpy as np
+import matplotlib.pyplot as plt
 
 IMAGE_FILENAME = "../data/person.jpg"
+WIDTH=1000
+HEIGHT=667
+
 MAX_MESSAGE_LENGTH = 6000000
 
 def arrayTogRPCImage(img):
@@ -29,14 +35,13 @@ def arrayTogRPCImage(img):
 
     return YOLOsvc_pb2.Image(img=output)
 
-def getObjectDetection(stub):
+def getObjectDetection(stub, img):
 
-    # load image from file
-    img = cv2.imread(IMAGE_FILENAME)
+    x = base64.b64encode(img)
 
-    # transform to YOLOsvc Image format
-    x = arrayTogRPCImage(img)
-    return stub.ObjectDetection(x)
+    request = YOLOsvc_pb2.ImageB64(b64image=x, width=WIDTH, height=HEIGHT)
+
+    return stub.ObjectDetectionV2(request)
 
 def run():
     # NOTE(gRPC Python Team): .close() is possible on a channel and should be
@@ -48,9 +53,12 @@ def run():
     ]) as channel:
         stub = YOLOsvc_pb2_grpc.YOLOsvcStub(channel)
 
+        # load image from file
+        img = cv2.imread(IMAGE_FILENAME)
+
         print("-------------- Object Detection --------------")
         start_time = time.time()
-        results = getObjectDetection(stub)
+        results = getObjectDetection(stub, img)
         end_time = time.time()
 
         print ("==> Object detection call took %s seconds." % (end_time - start_time))
