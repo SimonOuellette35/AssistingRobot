@@ -4,7 +4,6 @@ import YOLOsvc_pb2_grpc
 import cv2
 import base64
 
-MODEL_TYPE = 'person' # for the hands model, replace this with 'hands'
 MAX_MESSAGE_LENGTH = 6000000
 WIDTH=640
 HEIGHT=480
@@ -36,10 +35,10 @@ with grpc.insecure_channel('localhost:50051', options=[
         #print("Detected classes: ", results.classes)
 
         for i in range(len(results.classes)):
-            x1 = results.xmin[i]
-            x2 = results.xmax[i]
-            y1 = results.ymin[i]
-            y2 = results.ymax[i]
+            x1 = int(results.xmin[i])
+            x2 = int(results.xmax[i])
+            y1 = int(results.ymin[i])
+            y2 = int(results.ymax[i])
 
             cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
 
