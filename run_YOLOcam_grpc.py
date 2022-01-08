@@ -33,13 +33,17 @@ with grpc.insecure_channel('localhost:50051', options=[
         ret, img = cam.read()
 
         results = getObjectDetection(stub, img)
-        print("Detected classes: ", results.classes)
+        #print("Detected classes: ", results.classes)
 
-        # TOOD: how to render detection box and show detection image?
-        #imgs = results.render()
+        for i in range(len(results.classes)):
+            x1 = results.xmin[i]
+            x2 = results.xmax[i]
+            y1 = results.ymin[i]
+            y2 = results.ymax[i]
 
-        # for img in imgs:
-        #     cv2.imshow("", img)
+            cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
+
+        cv2.imshow("", img)
 
         if (cv2.waitKey(1) & 0xFF == ord('q')) or (cv2.waitKey(1)==27):
             break
