@@ -11,14 +11,14 @@ MODEL_TYPE = 'person'  # for the hands model, replace this with 'hand'
 MAX_MESSAGE_LENGTH = 6000000
 
 if MODEL_TYPE == 'person':
-    model = torch.hub.load('ultralytics/yolov5', 'yolov5s')
+    model = torch.hub.load('ultralytics/yolov5', 'yolov5l6')
 elif MODEL_TYPE == 'hand':
     model = torch.hub.load('ultralytics/yolov5', 'custom', path='models/hands_model.pt', force_reload=True)  # default
 else:
     print("Error: unknown model type. Use either 'person' or 'hand'")
     exit(-1)
 
-model.conf = 0.25
+model.conf = 0.75
 
 def grpcImageToArray(img):
     x = []
