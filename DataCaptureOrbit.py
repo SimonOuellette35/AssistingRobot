@@ -41,10 +41,6 @@ def main(scr):
     scr.clear()
 
     # init servo camera:
-    scr.addstr(0, 0, "Scanning for human...")
-    orbit.scan()
-    scr.addstr(1, 0, "Found human!")
-
     while True:
         if cap is not None and out is not None:
             # Need to capture a video frame!
@@ -112,7 +108,8 @@ def main(scr):
             orbit.decreaseSpeed()
 
         if c == ord('i'):
-            orbit.scan()
+            scr.addstr(0, 0, "Initializing scanner...")
+            orbit.scan(scr)
 
         if c == ord('f'):   # Start filming
             if cap is None:
