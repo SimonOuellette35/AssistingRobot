@@ -111,6 +111,9 @@ def main(scr):
         if c == curses.KEY_NPAGE:   # Page down: decrease speed
             orbit.decreaseSpeed()
 
+        if c == ord('i'):
+            orbit.scan()
+
         if c == ord('f'):   # Start filming
             if cap is None:
                 filename = getTimestampFilename()
