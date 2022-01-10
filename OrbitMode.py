@@ -79,7 +79,7 @@ class OrbitMode:
                     if spin_counter >= 2:
                         return None
                     else:
-                        self.spinClockwise()
+                        self.spin180Clockwise()
                         self.init_phase(self.current_servo_pitch)
 
                 counter += 1
@@ -107,10 +107,13 @@ class OrbitMode:
 
             # sub-task 1: center on the left-right axis
             if box_centerpoint[0] < (self.screen_centerpoint[0] - self.epsilon):
-                self.camLeft(delta=50)
+                limit_reached = self.camLeft(delta=50)
                 centered = False
 
-                # TODO: handle the case where the camera is already at the leftmost rotation. Must rotate the car itself.
+                # handle the case where the camera is already at the leftmost rotation. Must rotate the car itself.
+                if limit_reached:
+                    self.spin90CounterClockwise()
+                    self.camRight(delta=250)
 
                 scr.addstr(4, 0, "==> Off to the LEFT by %s pixels (box center = %s, THRESHOLD = %s)" % (
                     box_centerpoint[0] - self.screen_centerpoint[0],
@@ -120,10 +123,14 @@ class OrbitMode:
                 scr.refresh()
 
             elif box_centerpoint[0] > self.screen_centerpoint[0] + self.epsilon:
-                self.camRight(delta=50)
+                limit_reached = self.camRight(delta=50)
                 centered = False
 
-                # TODO: handle the case where the camera is already at the rightmost rotation. Must rotate the car itself.
+                # handle the case where the camera is already at the rightmost rotation. Must rotate the car itself.
+                if limit_reached:
+                    self.spin90Clockwise()
+                    self.camLeft(delta=250)
+
                 scr.addstr(4, 0, "==> Off to the RIGHT by %s pixels (box center = %s, THRESHOLD = %s)" % (
                     self.screen_centerpoint[0] - box_centerpoint[0],
                     box_centerpoint[0],
@@ -254,9 +261,19 @@ class OrbitMode:
         #TODO
         pass
 
-    def spinClockwise(self):
+    def spin180Clockwise(self):
         for _ in range(10):
             self.robot.Speed_Wheel_control(-10, -10, 10, 10)
+            time.sleep(0.1)
+
+    def spin90Clockwise(self):
+        for _ in range(4):
+            self.robot.Speed_Wheel_control(-10, -10, 10, 10)
+            time.sleep(0.1)
+
+    def spin90CounterClockwise(self):
+        for _ in range(4):
+            self.robot.Speed_Wheel_control(10, 10, -10, -10)
             time.sleep(0.1)
 
     def forward(self):
