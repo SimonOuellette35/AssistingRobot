@@ -13,31 +13,36 @@ HEIGHT = 480
 
 class OrbitMode:
 
-    def __init__(self):
+    def __init__(self, scr):
         self.robot = Raspblock()
-
+        self.scr = scr
         self.current_servo_yaw = 2500
         self.speed = 8
         self.screen_centerpoint = [WIDTH / 2, HEIGHT / 2]
         self.epsilon = 25
         self.video_getter = VideoGetter(WIDTH, HEIGHT, 0).start()
         self.current_servo_pitch = 1250
+        self.channel = grpc.insecure_channel('192.168.0.193:50051', options=[
+            ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
+            ('grpc.max_receive_message_length', MAX_MESSAGE_LENGTH),
+        ])
+        self.stub = YOLOsvc_pb2_grpc.YOLOsvcStub(self.channel)
 
-    def getObjectDetection(self, stub, img):
+    def getObjectDetection(self, img):
 
         x = base64.b64encode(img)
 
         request = YOLOsvc_pb2.ImageB64(b64image=x, width=WIDTH, height=HEIGHT)
 
-        return stub.ObjectDetectionV2(request)
+        return self.stub.ObjectDetectionV2(request)
 
-    def detect_human(self, stub):
+    def detect_human(self):
 
         img = None
         while img is None:
             img = self.video_getter.frame
 
-        results = self.getObjectDetection(stub, img)
+        results = self.getObjectDetection(img)
 
         # find out if a human was detected in the image
         # name column = "person", class = 0, confidence > .5, xmax, xmin, ymax, ymin
@@ -53,7 +58,7 @@ class OrbitMode:
 
         return human_detected, human_coords
 
-    def phase1_detect(self, stub, scr):
+    def phase1_detect(self):
         human_detected = False
         human_coords = None
 
@@ -62,15 +67,18 @@ class OrbitMode:
         spin_counter = 0
         while not human_detected:
 
-            human_detected, human_coords = self.detect_human(stub)
+            human_detected, human_coords = self.detect_human()
 
             # TODO: false positives are a problem... Try using higher quality YOLO model on the server side?
             #  Also make it an average detection over 5 frames? (across rotations so we don't waste time?)
             #  Maybe play with model conf on server side as well. And use joint probability over a few frames?
 
+            # TODO: review literature on increasing detection confidence across frames. This could be area of
+            #  improvement for a paper?
+
             if not human_detected:
-                scr.addstr(1, 0, "No human detected, moving camera to the right (%s)..." % counter)
-                scr.refresh()
+                self.scr.addstr(1, 0, "No human detected, moving camera to the right (%s)..." % counter)
+                self.scr.refresh()
                 if self.camRight(delta=100):
                     # we reached the rightmost range of the servo.
                     # spin right 180 degrees. Do this once, then give up.
@@ -86,9 +94,9 @@ class OrbitMode:
 
         return human_coords
 
-    def phase2_center(self, stub, human_coords, scr):
-        scr.addstr(2, 0, "Phase 2: Centering the human...")
-        scr.refresh()
+    def phase2_center(self, human_coords):
+        self.scr.addstr(2, 0, "Phase 2: Centering the human...")
+        self.scr.refresh()
 
         good_frame = 0
         centered = False
@@ -96,12 +104,12 @@ class OrbitMode:
             box_centerpoint = [(human_coords[0] + human_coords[2]) / 2., (human_coords[1] + human_coords[3]) / 2.]
             box_width = (human_coords[2] - human_coords[0]) / float(WIDTH)
 
-            scr.addstr(3, 0, "Not yet centered: centerpoint = %s, %s, width = %s" % (
+            self.scr.addstr(3, 0, "Not yet centered: centerpoint = %s, %s, width = %s" % (
                 box_centerpoint[0],
                 box_centerpoint[1],
                 box_width
             ))
-            scr.refresh()
+            self.scr.refresh()
 
             centered = True
 
@@ -113,14 +121,15 @@ class OrbitMode:
                 # handle the case where the camera is already at the leftmost rotation. Must rotate the car itself.
                 if limit_reached:
                     self.spin90CounterClockwise()
+                    time.sleep(0.2)
                     self.camRight(delta=250)
 
-                scr.addstr(4, 0, "==> Off to the LEFT by %s pixels (box center = %s, THRESHOLD = %s)" % (
+                self.scr.addstr(4, 0, "==> Off to the LEFT by %s pixels (box center = %s, THRESHOLD = %s)" % (
                     box_centerpoint[0] - self.screen_centerpoint[0],
                     box_centerpoint[0],
                     (self.screen_centerpoint[0] - self.epsilon)
                 ))
-                scr.refresh()
+                self.scr.refresh()
 
             elif box_centerpoint[0] > self.screen_centerpoint[0] + self.epsilon:
                 limit_reached = self.camRight(delta=50)
@@ -131,90 +140,119 @@ class OrbitMode:
                     self.spin90Clockwise()
                     self.camLeft(delta=250)
 
-                scr.addstr(4, 0, "==> Off to the RIGHT by %s pixels (box center = %s, THRESHOLD = %s)" % (
+                self.scr.addstr(4, 0, "==> Off to the RIGHT by %s pixels (box center = %s, THRESHOLD = %s)" % (
                     self.screen_centerpoint[0] - box_centerpoint[0],
                     box_centerpoint[0],
                     (self.screen_centerpoint[0] + self.epsilon)
                 ))
-                scr.refresh()
+                self.scr.refresh()
 
             # sub-task 2: find top of person (head)
             elif human_coords[1] < 1.:
                 self.camUp(delta=40)
                 centered = False
 
-                scr.addstr(4, 0, "==> TOO LOW, top pixel is %s" % (
+                self.scr.addstr(4, 0, "==> TOO LOW, top pixel is %s" % (
                     human_coords[1]
                 ))
-                scr.refresh()
+                self.scr.refresh()
 
             # sub-task 3: move forward/away so that the width of the detection box covers about X% of the screen width
             elif box_width > 0.5:
                 self.backward()
                 centered = False
 
-                scr.addstr(4, 0, "==> TOO WIDE")
-                scr.refresh()
+                self.scr.addstr(4, 0, "==> TOO WIDE")
+                self.scr.refresh()
             elif box_width < 0.2:
-                self.forward()
+                self.forward(delta=10)
                 centered = False
 
-                scr.addstr(4, 0, "==> TOO NARROW")
-                scr.refresh()
+                self.scr.addstr(4, 0, "==> TOO NARROW")
+                self.scr.refresh()
 
             if centered:
                 good_frame += 1
 
-                if good_frame < 4:
+                if good_frame < 1:      # Increase this number to number of consecutive frames of detection to be considered centered.
                     centered = False
 
             # update human_coords
-            human_detected, human_coords = self.detect_human(stub)
+            human_detected, human_coords = self.detect_human()
 
-        scr.addstr(4, 0, "==> SUCCESS !")
-        scr.refresh()
+        self.scr.addstr(4, 0, "==> SUCCESS !")
+        self.scr.refresh()
 
         return centered
+
+    def close(self):
+        self.video_getter.stop()
+        self.channel.close()
+        del self.robot
+
+    # this function re-orients the car so that it faces the locked-in human, repositioning the camera so that
+    # it is facing forward.
+    def lock_in(self):
+        # 1000 = right-most cam position, -1000 = left-most cam position
+        cam_position = 1500 - self.current_servo_yaw
+
+        self.scr.addstr(6, 0, "==> Lock in: current yaw is %s, cam_position = %s" % (self.current_servo_yaw, cam_position))
+        self.scr.refresh()
+
+        if abs(cam_position) < 10:  # already locked in
+            return
+
+        # Function that maps a cam_position to a corresponding car body spin rotation
+        # Reference points: -1000 means spin left 90 degrees. 1000 means spin right 90 degrees. 0 means don't move.
+        delta = (cam_position / 1000) * 30
+
+        if delta < 0:
+            self.spinLeft(abs(delta))
+        elif delta > 0:
+            self.spinRight(delta)
+
+        time.sleep(0.2)
+
+        # Position camera to center of yaw axis
+        self.current_servo_yaw = 1500
+        self.robot.Servo_control(self.current_servo_yaw, self.current_servo_pitch)
+
+        time.sleep(0.5)
 
     def init_phase(self, init_pitch=1250):
         self.current_servo_yaw = 2500
         self.current_servo_pitch = init_pitch
         self.robot.Servo_control(self.current_servo_yaw, self.current_servo_pitch)
 
-    # TODO: a lot of this scan loop can be re-used for the main orbit mode (for the constant re-centering/re-detecting)
     def scan(self, scr):
-        with grpc.insecure_channel('192.168.0.153:50051', options=[
-            ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
-            ('grpc.max_receive_message_length', MAX_MESSAGE_LENGTH),
-        ]) as channel:
-            stub = YOLOsvc_pb2_grpc.YOLOsvcStub(channel)
+        init_pitch = 1250
+        self.init_phase()
 
-            init_pitch = 1250
-            self.init_phase()
+        centered = False
+        while not centered:
 
-            centered = False
-            while not centered:
+            # Phase 1: scan the room with large camera and robot movements to identify a human candidate
+            human_coords = self.phase1_detect()
 
-                # Phase 1: scan the room with large camera and robot movements to identify a human candidate
-                human_coords = self.phase1_detect(stub, scr)
+            if human_coords is None:
+                scr.addstr(0, 0, "ERROR ==> Failed to detect human in first scan phase! Trying again...")
+                scr.refresh()
 
-                if human_coords is None:
-                    scr.addstr(0, 0, "ERROR ==> Failed to detect human in first scan phase! Trying again...")
-                    scr.refresh()
+                # Start over, looking higher
+                init_pitch -= 250
+                if init_pitch <= 500:
+                    init_pitch = 600
 
-                    # Start over, looking higher
-                    init_pitch -= 250
-                    if init_pitch <= 500:
-                        init_pitch = 600
+                self.init_phase(init_pitch)
+            else:
+                # Step 2: fine tune to center the human: must see the top of the box as well (must not equal top of screen)
+                centered = self.phase2_center(human_coords)
 
-                    self.init_phase(init_pitch)
-                else:
-                    # Step 2: fine tune to center the human: must see the top of the box as well (must not equal top of screen)
-                    centered = self.phase2_center(stub, human_coords, scr)
+        #self.video_getter.stop()
 
-            self.video_getter.stop()
+        # TODO: Step 3: do we see hands? face? Note: you can't always see the hands (visual obstructions, for example)
 
-            # TODO: Step 3: do we see hands? face? Note: you can't always see the hands (visual obstructions, for example)
+        self.lock_in()
 
         # make a buzzer sound when human properly centered on
         self.robot.Buzzer_control(1)
@@ -253,13 +291,59 @@ class OrbitMode:
         else:
             return True
 
-    def orbitCounterClockwise(self):
-        # TODO
-        pass
+    def strafeRight(self, delta=50):
+        if delta <= 20:
+            self.robot.Speed_Wheel_control(int(-delta), int(delta), int(-delta), int(delta))
+        else:
+            iterations = int(delta // 10)
+            mini_delta = int(delta / iterations)
 
-    def orbitClockwise(self):
-        #TODO
-        pass
+            for _ in range(iterations):
+                self.robot.Speed_Wheel_control(int(-mini_delta), int(mini_delta), int(-mini_delta), int(mini_delta))
+                time.sleep(0.2)
+
+    def strafeLeft(self, delta=50):
+        if delta <= 20:
+            self.robot.Speed_Wheel_control(int(delta), int(-delta), int(delta), int(-delta))
+        else:
+            iterations = int(delta // 10)
+            mini_delta = int(delta / iterations)
+
+            for _ in range(iterations):
+                self.robot.Speed_Wheel_control(int(mini_delta), int(-mini_delta), int(mini_delta), int(-mini_delta))
+                time.sleep(0.2)
+
+    def orbitCounterClockwise(self, delta=50):
+        # Strafe right
+        self.strafeRight(delta)
+
+        # Re-center to human
+        detected, human_coords = self.detect_human()
+
+        # TODO: if the box width changed significantly, might need to move forward a bit to adjust to orbit
+
+        if detected:
+            self.phase2_center(human_coords)
+            self.lock_in()
+        else:
+            # TODO: must resume scanning, in the right direction (starting from current cam position)...
+            pass
+
+    def orbitClockwise(self, delta=50):
+        # Strafe right
+        self.strafeLeft(delta)
+
+        # Re-center to human
+        detected, human_coords = self.detect_human()
+
+        # TODO: if the box width changed significantly, might need to move forward a bit to adjust to orbit
+
+        if detected:
+            self.phase2_center(human_coords)
+            self.lock_in()
+        else:
+            # TODO: must resume scanning, in the right direction (starting from current cam position)...
+            pass
 
     def spin180Clockwise(self):
         for _ in range(10):
@@ -276,8 +360,22 @@ class OrbitMode:
             self.robot.Speed_Wheel_control(10, 10, -10, -10)
             time.sleep(0.1)
 
-    def forward(self):
-        self.robot.Speed_Wheel_control(self.speed, self.speed, self.speed, self.speed)
+    def spinLeft(self, delta):
+        self.robot.Speed_Wheel_control(int(delta), int(delta), int(-delta), int(-delta))
+
+    def spinRight(self, delta):
+        if delta <= 15:
+            self.robot.Speed_Wheel_control(int(-delta), int(-delta), int(delta), int(delta))
+        else:
+            iterations = int(delta // 10)
+            mini_delta = int(delta / iterations)
+
+            for _ in range(iterations):
+                self.robot.Speed_Wheel_control(int(-mini_delta), int(-mini_delta), int(mini_delta), int(mini_delta))
+                time.sleep(0.2)
+
+    def forward(self, delta):
+        self.robot.Speed_Wheel_control(int(delta), int(delta), int(delta), int(delta))
 
     def backward(self):
         self.robot.Speed_Wheel_control(-self.speed, -self.speed, -self.speed, -self.speed)
@@ -289,6 +387,3 @@ class OrbitMode:
     def decreaseSpeed(self):
         if self.speed >= 4:
             self.speed -= 2
-
-    def close(self):
-        del self.robot

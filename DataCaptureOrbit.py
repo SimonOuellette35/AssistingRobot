@@ -22,8 +22,6 @@ last_action = np.zeros(6) # (servo yaw, servo pitch, wheel #1, wheel #2, wheel #
 actions_file = None
 datawriter = None
 
-orbit = OrbitMode()
-
 def getTimestampFilename():
     now = datetime.now()
     basename = now.strftime("%Y-%m-%d_%H-%M-%S")
@@ -39,6 +37,8 @@ def main(scr):
     global datawriter
 
     scr.clear()
+
+    orbit = OrbitMode(scr)
 
     # init servo camera:
     while True:
@@ -57,6 +57,7 @@ def main(scr):
         c = scr.getch()
 
         if c == ord(' '):
+            orbit.close()
             return
 
         # # Control the camera
@@ -74,19 +75,13 @@ def main(scr):
         # elif c == curses.KEY_UP:
         #     last_action[1] = -cam_delta
         #
-        # # Control the motor
-        # elif c == ord('a'):   # left strafe
-        #     orbit.clockwise()
-        #     last_action[2] = speed
-        #     last_action[3] = -speed
-        #     last_action[4] = speed
-        #     last_action[5] = -speed
-        # elif c == ord('d'):   # right strafe
-        #     orbit.counterClockwise()
-        #     last_action[2] = -speed
-        #     last_action[3] = speed
-        #     last_action[4] = -speed
-        #     last_action[5] = speed
+
+        # Control the motor
+        elif c == ord('a'):   # clockwise orbit
+            orbit.orbitClockwise()
+        elif c == ord('d'):   # counter-clockwise orbit
+            orbit.orbitCounterClockwise()
+
         # elif c == ord('w'):   # forward
         #     orbit.forward()
         #     last_action[2] = speed
@@ -143,4 +138,3 @@ def main(scr):
                 scr.addstr(3, 0, "Done recoding. Saved data to file....                         ")
 
 wrapper(main)
-orbit.close()
