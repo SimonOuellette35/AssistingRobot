@@ -159,7 +159,7 @@ class OrbitMode:
 
             # sub-task 3: move forward/away so that the width of the detection box covers about X% of the screen width
             elif box_width > 0.5:
-                self.backward()
+                self.backward(delta=10)
                 centered = False
 
                 self.scr.addstr(4, 0, "==> TOO WIDE")
