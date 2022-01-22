@@ -8,19 +8,19 @@ import time
 from VideoGetter import VideoGetter
 
 MAX_MESSAGE_LENGTH = 6000000
-WIDTH = 640
-HEIGHT = 480
 
 class OrbitMode:
 
-    def __init__(self, scr):
+    def __init__(self, scr, width, height):
         self.robot = Raspblock()
         self.scr = scr
         self.current_servo_yaw = 2500
         self.speed = 8
-        self.screen_centerpoint = [WIDTH / 2, HEIGHT / 2]
+        self.WIDTH = width
+        self.HEIGHT = height
+        self.screen_centerpoint = [width / 2, height / 2]
         self.epsilon = 25
-        self.video_getter = VideoGetter(WIDTH, HEIGHT, 0).start()
+        self.video_getter = VideoGetter(width, height, 0).start()
         self.current_servo_pitch = 1250
         self.channel = grpc.insecure_channel('192.168.0.193:50051', options=[
             ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
@@ -32,7 +32,7 @@ class OrbitMode:
 
         x = base64.b64encode(img)
 
-        request = YOLOsvc_pb2.ImageB64(b64image=x, width=WIDTH, height=HEIGHT)
+        request = YOLOsvc_pb2.ImageB64(b64image=x, width=self.WIDTH, height=self.HEIGHT)
 
         return self.stub.ObjectDetectionV2(request)
 
@@ -102,7 +102,7 @@ class OrbitMode:
         centered = False
         while not centered:
             box_centerpoint = [(human_coords[0] + human_coords[2]) / 2., (human_coords[1] + human_coords[3]) / 2.]
-            box_width = (human_coords[2] - human_coords[0]) / float(WIDTH)
+            box_width = (human_coords[2] - human_coords[0]) / float(self.WIDTH)
 
             self.scr.addstr(3, 0, "Not yet centered: centerpoint = %s, %s, width = %s" % (
                 box_centerpoint[0],
@@ -377,8 +377,8 @@ class OrbitMode:
     def forward(self, delta):
         self.robot.Speed_Wheel_control(int(delta), int(delta), int(delta), int(delta))
 
-    def backward(self):
-        self.robot.Speed_Wheel_control(-self.speed, -self.speed, -self.speed, -self.speed)
+    def backward(self, delta):
+        self.robot.Speed_Wheel_control(-int(delta), -int(delta), -int(delta), -int(delta))
 
     def increaseSpeed(self):
         if self.speed <= 23:

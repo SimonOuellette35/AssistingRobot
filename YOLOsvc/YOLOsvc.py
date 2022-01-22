@@ -6,6 +6,7 @@ import YOLOsvc_pb2_grpc
 import torch
 import numpy as np
 import base64
+from time import time
 
 MODEL_TYPE = 'person'  # for the hands model, replace this with 'hand'
 MAX_MESSAGE_LENGTH = 6000000
@@ -81,14 +82,21 @@ class YOLOServicer(YOLOsvc_pb2_grpc.YOLOsvcServicer):
         return detections
 
     def ObjectDetectionV2(self, request, context):
+        rpc_start_time = time()
         img = request.b64image.encode()
 
         tmp = base64.decodebytes(img)
         x = np.frombuffer(tmp, dtype='uint8').reshape(request.height, request.width, -1)
 
+        start_time = time()
         results = model(x)
+        end_time = time()
 
         detections = ResultsToDetections(results)
+
+        rpc_end_time = time()
+
+        print("YOLO inference took %s seconds (full RPC took %s secs)" % (end_time - start_time, rpc_end_time - rpc_start_time))
         return detections
 
 def serve():
