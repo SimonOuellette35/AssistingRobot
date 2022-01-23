@@ -21,6 +21,8 @@ optimizer = optim.AdamW(model.parameters(), lr=LR)
 
 for epoch in range(NUM_EPOCHS):
 
+    optimizer.zero_grad()
+
     epoch_loss = 0.
     for i in range(len(X)):
         # TODO: batching

@@ -1,17 +1,59 @@
 import torch.nn.functional as F
+import torch.nn as nn
 import numpy as np
 
-class MotionPlanner:
+def conv_block(in_channels, out_channels):
+    return nn.Sequential(
+        nn.Conv2d(in_channels, out_channels, 3, padding=1),
+        nn.BatchNorm2d(out_channels),
+        nn.ReLU(),
+        nn.MaxPool2d(2)
+    )
 
-    def __init__(self):
-        self.encoder = None # TODO
-        self.confPredictor = None # TODO
-        self.transitionPredictor = None # TODO
-        self.STOP_THRESHOLD = 0.
+class MotionPlanner(nn.Module):
+
+    def __init__(self, x_dim=1, hid_dim=64, z_dim=64, stop_threshold=0.):
+        self.encoder = nn.Sequential(
+            conv_block(x_dim, hid_dim),
+            conv_block(hid_dim, hid_dim),
+            conv_block(hid_dim, hid_dim),
+            conv_block(hid_dim, z_dim),
+        )
+
+        # Feed-forward, regression (single scalar)
+        self.confPredictor = nn.Sequential(
+            nn.Linear(z_dim, hid_dim),
+            nn.BatchNorm2d(hid_dim),
+            nn.ReLU(),
+            nn.Linear(hid_dim, hid_dim),
+            nn.BatchNorm2d(hid_dim),
+            nn.ReLU(),
+            nn.Linear(hid_dim, hid_dim),
+            nn.BatchNorm2d(hid_dim),
+            nn.ReLU(),
+            nn.Linear(hid_dim, 1)
+        )
+
+        # Feed-forward, regression (predicts a z_dim vector)
+        self.transitionPredictor = nn.Sequential(
+            nn.Linear(z_dim, hid_dim),
+            nn.BatchNorm2d(hid_dim),
+            nn.ReLU(),
+            nn.Linear(hid_dim, hid_dim),
+            nn.BatchNorm2d(hid_dim),
+            nn.ReLU(),
+            nn.Linear(hid_dim, hid_dim),
+            nn.BatchNorm2d(hid_dim),
+            nn.ReLU(),
+            nn.Linear(hid_dim, z_dim)
+        )
+
+        self.EMBEDDING_DIM = z_dim
+        self.STOP_THRESHOLD = stop_threshold
 
     # 2 loss-terms, one that validates the predicted confidences, and one that enforces consistency between
-    # the encoder and the predicted transitions, by making sure that each predicted transitions matche the actual
-    # encoded images at t+1.
+    # the encoder and the predicted transitions, by making sure that each predicted transition matches the actual
+    # encoded image at t+1.
     def calculate_loss(self, pred_conf, conf, pred_emb, enc_emb):
         confidence_loss = F.smooth_l1_loss(pred_conf, conf) # pair-wise mean-squared error
         transition_loss = F.smooth_l1_loss(pred_emb, enc_emb) # pair-wise mean_squared error
@@ -29,7 +71,9 @@ class MotionPlanner:
             encoded_embeddings.append(img_embedding)
 
             if i > 0:
-                pred_embedding = self.transitionPredictor(img_embedding, actions[i+1])  # TODO: a(t+1) vs image(t-1)???
+                # previous image embedding + current action ==> predict current image embedding
+                prev_embedding = self.encoder(images[i-1])
+                pred_embedding = self.transitionPredictor(prev_embedding, actions[i])
             else:
                 pred_embedding = img_embedding
 
@@ -40,7 +84,7 @@ class MotionPlanner:
 
         return self.calculate_loss(pred_confidences, confidences, pred_embeddings, encoded_embeddings)
 
-    def predict(self, img, a):
+    def forward(self, img, a):
         # prediction of transition
         pred_embedding = self.transitionPredictor(img, a)
 
@@ -48,10 +92,10 @@ class MotionPlanner:
         return self.confPredictor(pred_embedding)
 
     def predictBestAction(self, img, current_value):
-        pred1 = self.predict(img, 1)
-        pred2 = self.predict(img, 2)
-        pred3 = self.predict(img, 3)
-        pred4 = self.predict(img, 4)
+        pred1 = self.forward(img, 1)
+        pred2 = self.forward(img, 2)
+        pred3 = self.forward(img, 3)
+        pred4 = self.forward(img, 4)
 
         gain1 = pred1 - current_value
         gain2 = pred2 - current_value
