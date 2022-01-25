@@ -10,6 +10,9 @@ import torch
 NUM_EPOCHS = 1000
 LR = 0.0001
 data_dir = './data/training_data/'
+WIDTH = 640
+HEIGHT = 480
+NUM_CHANNELS = 3
 
 #  N = number of total sequences to train on
 #  T = number of timesteps in the sequences: this can vary from sequence to sequence, hence we have embedded lists,
@@ -30,10 +33,11 @@ for file in os.listdir(directory):
         with open("%s%s" % (data_dir, filename), 'r') as csvfile:
             datareader = csv.reader(csvfile, delimiter=',')
 
-            for a in datareader:
-                action_sequence.append(float(a[0]))
+            for row in datareader:
+                action_sequence.append(float(row[0]))
 
-        a.append(np.reshape(action_sequence, [-1, 1]))
+        tmp_a = np.reshape(action_sequence, [-1, 1])
+        a.append(tmp_a)
     elif filename.endswith(".avi"):
         image_sequence = []
 
@@ -53,7 +57,7 @@ for file in os.listdir(directory):
                 transform = transforms.ToTensor()
 
                 # Convert the image to PyTorch tensor
-                tensor = transform(image)
+                tensor = torch.reshape(transform(image), [1, -1, WIDTH, HEIGHT])
                 image_sequence.append(tensor)
             else:
                 cap.release()
@@ -61,7 +65,9 @@ for file in os.listdir(directory):
         cap.release()
         cv2.destroyAllWindows()
 
-        X.append(image_sequence)
+        img_sequence_tensor = torch.cat(image_sequence, axis=0)
+
+        X.append(img_sequence_tensor)
 
         conf_sequence = []
         for i in range(frame_count):
@@ -70,7 +76,7 @@ for file in os.listdir(directory):
 
         c.append(np.reshape(conf_sequence, [-1, 1]))
 
-model = MotionPlanner()
+model = MotionPlanner(x_dim=NUM_CHANNELS)
 model.train()
 optimizer = optim.AdamW(model.parameters(), lr=LR)
 

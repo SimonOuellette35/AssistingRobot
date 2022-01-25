@@ -1,6 +1,7 @@
 import torch.nn.functional as F
 import torch.nn as nn
 import numpy as np
+import torch
 
 def conv_block(in_channels, out_channels):
     return nn.Sequential(
@@ -13,23 +14,23 @@ def conv_block(in_channels, out_channels):
 class MotionPlanner(nn.Module):
 
     def __init__(self, x_dim=1, hid_dim=64, z_dim=64, stop_threshold=0.):
+        super().__init__()
+
         self.encoder = nn.Sequential(
             conv_block(x_dim, hid_dim),
             conv_block(hid_dim, hid_dim),
             conv_block(hid_dim, hid_dim),
-            conv_block(hid_dim, z_dim),
+            nn.Flatten(),
+            nn.Linear(307200, z_dim)
         )
 
         # Feed-forward, regression (single scalar)
         self.confPredictor = nn.Sequential(
             nn.Linear(z_dim, hid_dim),
-            nn.BatchNorm2d(hid_dim),
             nn.ReLU(),
             nn.Linear(hid_dim, hid_dim),
-            nn.BatchNorm2d(hid_dim),
             nn.ReLU(),
             nn.Linear(hid_dim, hid_dim),
-            nn.BatchNorm2d(hid_dim),
             nn.ReLU(),
             nn.Linear(hid_dim, 1)
         )
@@ -37,13 +38,10 @@ class MotionPlanner(nn.Module):
         # Feed-forward, regression (predicts a z_dim vector)
         self.transitionPredictor = nn.Sequential(
             nn.Linear(z_dim, hid_dim),
-            nn.BatchNorm2d(hid_dim),
             nn.ReLU(),
             nn.Linear(hid_dim, hid_dim),
-            nn.BatchNorm2d(hid_dim),
             nn.ReLU(),
             nn.Linear(hid_dim, hid_dim),
-            nn.BatchNorm2d(hid_dim),
             nn.ReLU(),
             nn.Linear(hid_dim, z_dim)
         )
@@ -62,20 +60,19 @@ class MotionPlanner(nn.Module):
 
     def trainSequence(self, images, actions, confidences):
 
-        encoded_embeddings = []
+        encoded_embeddings = self.encoder(images)
         pred_embeddings = []
         pred_confidences = []
 
         for i in range(len(images)):
-            img_embedding = self.encoder(images[i])
-            encoded_embeddings.append(img_embedding)
+            img_embedding = encoded_embeddings[i]
 
             if i > 0:
                 # previous image embedding + current action ==> predict current image embedding
-                prev_embedding = self.encoder(images[i-1])
-                pred_embedding = self.transitionPredictor(prev_embedding, actions[i])
+                prev_embedding = encoded_embeddings[i-1]
+                pred_embedding = self.transitionPredictor(prev_embedding, actions[i])   # TODO: append action to embedding vector? film layers conditioned on action?
             else:
-                pred_embedding = img_embedding
+                pred_embedding = torch.reshape(img_embedding, [1, -1])
 
             pred_embeddings.append(pred_embedding)
 
