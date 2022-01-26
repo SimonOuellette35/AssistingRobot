@@ -37,7 +37,7 @@ class MotionPlanner(nn.Module):
 
         # Feed-forward, regression (predicts a z_dim vector)
         self.transitionPredictor = nn.Sequential(
-            nn.Linear(z_dim, hid_dim),
+            nn.Linear(z_dim+1, hid_dim),            # The +1 is because we also concatenate an action to perform a transition
             nn.ReLU(),
             nn.Linear(hid_dim, hid_dim),
             nn.ReLU(),
@@ -45,6 +45,9 @@ class MotionPlanner(nn.Module):
             nn.ReLU(),
             nn.Linear(hid_dim, z_dim)
         )
+
+        self.transitionPredictor.double()
+        self.confPredictor.double()
 
         self.EMBEDDING_DIM = z_dim
         self.STOP_THRESHOLD = stop_threshold
@@ -70,14 +73,24 @@ class MotionPlanner(nn.Module):
             if i > 0:
                 # previous image embedding + current action ==> predict current image embedding
                 prev_embedding = encoded_embeddings[i-1]
-                pred_embedding = self.transitionPredictor(prev_embedding, actions[i])   # TODO: append action to embedding vector? film layers conditioned on action?
+                # Note: a good alternative to just concatenating the action to the embedding would be to condition
+                # the transition neural network on the action via FiLM layers (see BabyAI code for an example).
+
+                prev_embedding = torch.reshape(prev_embedding, [1, -1])
+                act = torch.reshape(torch.from_numpy(np.array([actions[i]])), [1, 1])
+                transitionInput = torch.cat([prev_embedding, act], axis=-1)
+                pred_embedding = self.transitionPredictor(transitionInput)
             else:
                 pred_embedding = torch.reshape(img_embedding, [1, -1])
 
             pred_embeddings.append(pred_embedding)
 
-            pred_conf = self.confPredictor(pred_embedding)
+            pred_conf = self.confPredictor(pred_embedding.double())
             pred_confidences.append(pred_conf)
+
+        pred_confidences = torch.cat(pred_confidences)
+        confidences = torch.from_numpy(np.array(confidences))
+        pred_embeddings = torch.cat(pred_embeddings, axis=0)
 
         return self.calculate_loss(pred_confidences, confidences, pred_embeddings, encoded_embeddings)
 

@@ -26,55 +26,66 @@ c = []      # shape = [N, T, 1]
 # confidence value associated with each image.
 directory = os.fsencode(data_dir)
 
+timestamps = []
 for file in os.listdir(directory):
-    filename = os.fsdecode(file)
-    if filename.endswith(".csv"):
-        action_sequence = []
-        with open("%s%s" % (data_dir, filename), 'r') as csvfile:
-            datareader = csv.reader(csvfile, delimiter=',')
+    timestamp = os.path.splitext(file)[0].decode("utf-8")
+    timestamp = timestamp.replace("_masked", "")
+    if timestamp not in timestamps:
+        timestamps.append(timestamp)
 
-            for row in datareader:
-                action_sequence.append(float(row[0]))
+print("Found timestamps: ", timestamps)
 
-        tmp_a = np.reshape(action_sequence, [-1, 1])
-        a.append(tmp_a)
-    elif filename.endswith(".avi"):
-        image_sequence = []
+for timestamp in timestamps:
+    print("Loading timestamp %s" % timestamp)
+    csv_filename = os.fsdecode("%s.csv" % timestamp)
+    avi_filename = os.fsdecode("%s_masked.avi" % timestamp)
 
-        # load video frame by frame
-        cap = cv2.VideoCapture('%s%s' % (data_dir, filename))
-        frame_count = 0
-        while cap.isOpened():
-            ret, frame = cap.read()
+    action_sequence = []
+    with open("%s%s" % (data_dir, csv_filename), 'r') as csvfile:
+        datareader = csv.reader(csvfile, delimiter=',')
 
-            if ret:
-                frame_count += 1
+        for row in datareader:
+            action_sequence.append(float(row[0]))
 
-                # convert OpenCV image to array or tensor
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    tmp_a = np.reshape(action_sequence, [-1, 1])
+    a.append(tmp_a)
 
-                # Define a transform to convert the image to tensor
-                transform = transforms.ToTensor()
+    image_sequence = []
 
-                # Convert the image to PyTorch tensor
-                tensor = torch.reshape(transform(image), [1, -1, WIDTH, HEIGHT])
-                image_sequence.append(tensor)
-            else:
-                cap.release()
+    # load video frame by frame
+    cap = cv2.VideoCapture('%s%s' % (data_dir, avi_filename))
+    frame_count = 0
+    while cap.isOpened():
+        ret, frame = cap.read()
 
-        cap.release()
-        cv2.destroyAllWindows()
+        if ret:
+            frame_count += 1
 
-        img_sequence_tensor = torch.cat(image_sequence, axis=0)
+            # convert OpenCV image to array or tensor
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        X.append(img_sequence_tensor)
+            # Define a transform to convert the image to tensor
+            transform = transforms.ToTensor()
 
-        conf_sequence = []
-        for i in range(frame_count):
-            tmp = (i / (frame_count-1))
-            conf_sequence.append(tmp)
+            # Convert the image to PyTorch tensor
+            tensor = torch.reshape(transform(image), [1, -1, WIDTH, HEIGHT])
+            image_sequence.append(tensor)
+        else:
+            cap.release()
 
-        c.append(np.reshape(conf_sequence, [-1, 1]))
+    cap.release()
+    cv2.destroyAllWindows()
+
+    img_sequence_tensor = torch.cat(image_sequence, axis=0)
+
+    X.append(img_sequence_tensor)
+
+    conf_sequence = []
+    for i in range(frame_count):
+        tmp = (i / (frame_count-1))
+        conf_sequence.append(tmp)
+
+    c.append(np.reshape(conf_sequence, [-1, 1]))
 
 model = MotionPlanner(x_dim=NUM_CHANNELS)
 model.train()
