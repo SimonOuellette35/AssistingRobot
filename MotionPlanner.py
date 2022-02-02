@@ -13,15 +13,15 @@ def conv_block(in_channels, out_channels):
 
 class MotionPlanner(nn.Module):
 
-    def __init__(self, x_dim=1, hid_dim=64, z_dim=64, stop_threshold=0.):
+    def __init__(self, x_dim=1, hid_dim=128, z_dim=128, stop_threshold=0.):
         super().__init__()
 
         self.encoder = nn.Sequential(
-            conv_block(x_dim, hid_dim),
-            conv_block(hid_dim, hid_dim),
-            conv_block(hid_dim, hid_dim),
+            conv_block(x_dim, 64),
+            conv_block(64, 32),
+            conv_block(32, 16),
             nn.Flatten(),
-            nn.Linear(307200, z_dim)
+            nn.Linear(76800, z_dim)
         )
 
         # Feed-forward, regression (single scalar)
@@ -56,14 +56,17 @@ class MotionPlanner(nn.Module):
     # the encoder and the predicted transitions, by making sure that each predicted transition matches the actual
     # encoded image at t+1.
     def calculate_loss(self, pred_conf, conf, pred_emb, enc_emb):
-        confidence_loss = F.smooth_l1_loss(pred_conf, conf) # pair-wise mean-squared error
-        transition_loss = F.smooth_l1_loss(pred_emb, enc_emb) # pair-wise mean_squared error
+        # confidence_loss = F.smooth_l1_loss(pred_conf, conf) # pair-wise mean-squared error
+        # transition_loss = F.smooth_l1_loss(pred_emb, enc_emb) # pair-wise mean_squared error
+        confidence_loss = F.mse_loss(pred_conf.double(), conf.double()) # pair-wise mean-squared error
+        transition_loss = F.mse_loss(pred_emb.double(), enc_emb.double()) # pair-wise mean_squared error
 
-        return confidence_loss + transition_loss
+        print("confidence_loss = %s, transition_loss = %s" % (confidence_loss, transition_loss))
+        return confidence_loss.double() + transition_loss.double()
 
     def trainSequence(self, images, actions, confidences):
 
-        encoded_embeddings = self.encoder(images)
+        encoded_embeddings = self.encoder(images.float())
         pred_embeddings = []
         pred_confidences = []
 
@@ -94,9 +97,19 @@ class MotionPlanner(nn.Module):
 
         return self.calculate_loss(pred_confidences, confidences, pred_embeddings, encoded_embeddings)
 
+    def evalConf(self, img):
+        encoded_img = self.encoder(img.double())
+        return self.confPredictor(encoded_img)
+
     def forward(self, img, a):
         # prediction of transition
-        pred_embedding = self.transitionPredictor(img, a)
+        img = img.float()
+        embedding = self.encoder(img)
+        prev_embedding = torch.reshape(embedding, [1, -1])
+        act = torch.reshape(torch.from_numpy(np.array([a])), [1, 1])
+        transitionInput = torch.cat([prev_embedding, act], axis=-1)
+
+        pred_embedding = self.transitionPredictor(transitionInput.double())
 
         # return predicted value for predicted transition
         return self.confPredictor(pred_embedding)
@@ -112,14 +125,13 @@ class MotionPlanner(nn.Module):
         gain3 = pred3 - current_value
         gain4 = pred4 - current_value
 
-        gains = np.array([gain1, gain2, gain3, gain4])
+        gains = np.array([gain1.data.numpy(), gain2.data.numpy(), gain3.data.numpy(), gain4.data.numpy()])
         best_gain_idx = np.argmax(gains)
         best_gain = gains[best_gain_idx]
 
         # return action of best gain in value relative to current. If all relative gains are below a certain
         #  threshold, return action 0 (stop moving)
         if best_gain <= self.STOP_THRESHOLD:
-            return 0
+            return 0, gains
         else:
-            return best_gain_idx+1
-
+            return best_gain_idx+1, gains
